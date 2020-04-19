@@ -9,7 +9,7 @@ import (
 func TestTypeSize(t *testing.T) {
 	fmt.Println(unsafe.Sizeof(B{}))       // 8
 	fmt.Println(unsafe.Sizeof(pair{}))    // 16
-	fmt.Println(unsafe.Sizeof(bstruct{})) // 56
+	fmt.Println(unsafe.Sizeof(bstruct{})) // 64
 	t.Fail()
 }
 

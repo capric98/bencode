@@ -8,21 +8,20 @@ import (
 
 // A Decoder reads and decodes B values from an input stream.
 type Decoder struct {
-	r           io.Reader
-	buf         []byte
-	pos, bufLen int
+	r      io.Reader
+	buf    []byte
+	bufLen int
+	pos    int
 
-	b *B
+	result B
 }
 
 // Decode decodes B values from an input []byte.
-func Decode(body []byte) (*B, error) {
-	cbuf := make([]byte, len(body))
-	copy(cbuf, body)
+func Decode(body []byte) (B, error) {
 	return (&Decoder{
 		r:   nil,
-		buf: cbuf,
-		b:   &B{b: &bstruct{}},
+		buf: append(body[:0:0], body...),
+		//b:   &B{b: &bstruct{}},
 	}).Decode()
 }
 
@@ -31,27 +30,45 @@ func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{
 		r:   r,
 		buf: nil,
-		b:   &B{b: &bstruct{}},
+		//b:   &B{b: &bstruct{}},
 	}
 }
 
 // Decode decodes B values from *Decoder.
-func (d *Decoder) Decode() (b *B, e error) {
+func (d *Decoder) Decode() (b B, e error) {
 	if d.r != nil {
 		body, e := ioutil.ReadAll(d.r)
 		if e != nil {
-			return nil, e
+			return b, e
 		}
 		d.buf = body
 	}
 	d.bufLen = len(d.buf)
+	d.result.b = (pool.Get()).(*[]bstruct)
 
-	e = d.decode(d.b.b, 1)
-	b = d.b
+	e = d.decode(0, 1)
+	if e == nil {
+		cb := append((*(d.result.b))[:0:0], (*(d.result.b))...)
+		b = B{
+			pos: 0,
+			b:   &cb,
+		}
+	}
+	go func() {
+		ob := *(d.result.b)
+		for i := range ob {
+			ob[i].typ = NULL
+			ob[i].keys = ob[i].keys[:0]
+			ob[i].list = ob[i].list[:0]
+		}
+		ob = ob[:1]
+		pool.Put(&ob)
+	}()
+
 	return
 }
 
-func (d *Decoder) decode(bs *bstruct, depth byte) (e error) {
+func (d *Decoder) decode(bpos int, depth byte) (e error) {
 	if depth == 0 {
 		return ErrMaxDepth
 	}
@@ -60,48 +77,58 @@ func (d *Decoder) decode(bs *bstruct, depth byte) (e error) {
 		return io.EOF
 	}
 
-	// fmt.Println("Decode:", string(d.buf[d.pos:]))
-
 	switch d.buf[d.pos] {
 	case 'd':
-		bs.typ = DICT
+		(*(d.result.b))[bpos].typ = DICT
 		d.pos++
 		for {
-			var key string
-			d.decodeStr(&key)
-			nbs := &bstruct{}
-			e = d.decode(nbs, depth+1)
+			nbpos := d.result.next()
+
+			key := d.decodeStr()
+			e = d.decode(nbpos, depth+1)
 			if e != nil {
 				return
 			}
-			if nbs.typ == NULL {
+			if key != nil && (*(d.result.b))[nbpos].typ != NULL {
+				(*(d.result.b))[bpos].keys = append((*(d.result.b))[bpos].keys, *key)
+				(*(d.result.b))[bpos].list = append((*(d.result.b))[bpos].list, nbpos)
+			} else {
+				d.result.retrive(nbpos)
 				return
 			}
-			bs.list = append(bs.list, pair{key: &key, value: nbs})
 		}
 	case 'l':
-		bs.typ = LIST
+		(*(d.result.b))[bpos].typ = LIST
 		d.pos++
 		for {
-			nbs := &bstruct{}
-			e = d.decode(nbs, depth+1)
+			nbpos := d.result.next()
+
+			e = d.decode(nbpos, depth+1)
 			if e != nil {
 				return
 			}
-			if nbs.typ == NULL {
-				break
+			if (*(d.result.b))[nbpos].typ != NULL {
+				(*(d.result.b))[bpos].list = append((*(d.result.b))[bpos].list, nbpos)
+			} else {
+				d.result.retrive(nbpos)
+				return
 			}
-			bs.list = append(bs.list, pair{value: nbs})
 		}
 	case 'e':
 		d.pos++
+		(*(d.result.b))[bpos].typ = NULL
+		(*(d.result.b))[bpos].keys = nil
+		(*(d.result.b))[bpos].list = nil
 		return
 	case 'i':
-		bs.typ = INT
-		bs.n = d.decodeInt()
+		(*(d.result.b))[bpos].typ = INT
+		(*(d.result.b))[bpos].n = d.decodeInt()
 	default:
-		bs.typ = STRING
-		d.decodeStr(&bs.str)
+		(*(d.result.b))[bpos].typ = STRING
+		if key := d.decodeStr(); key != nil {
+			(*(d.result.b))[bpos].str = *key
+			// (*(d.result.b))[bpos].keys = append((*(d.result.b))[bpos].keys, *key)
+		}
 	}
 
 	return
@@ -135,13 +162,13 @@ func (d *Decoder) decodeInt() int64 {
 	return -value
 }
 
-func (d *Decoder) decodeStr(str *string) {
+func (d *Decoder) decodeStr() *string {
 	pos := d.pos
 	if pos >= d.bufLen {
-		return
+		return nil
 	}
 	if d.buf[pos] == 'e' {
-		return
+		return nil
 	}
 	// fmt.Println("decode string", string(d.buf[d.pos:]))
 
@@ -151,10 +178,21 @@ func (d *Decoder) decodeStr(str *string) {
 	}
 	startPos, endPos := pos+1, pos+slen+1
 	if endPos > d.bufLen {
-		return
+		return nil
 	}
 
 	d.pos = endPos
-	sb := d.buf[startPos:endPos]
-	*str = *(*string)(unsafe.Pointer(&sb))
+	bstr := d.buf[startPos:endPos]
+	return (*string)(unsafe.Pointer(&bstr))
+}
+
+func (b B) retrive(pos int) {
+	if pos < len(*(b.b)) {
+		(*(b.b)) = (*(b.b))[:pos]
+	}
+}
+
+func (b B) next() int {
+	*(b.b) = append(*(b.b), bstruct{})
+	return len(*(b.b)) - 1
 }

@@ -15,14 +15,16 @@ const (
 
 // B illustrates a bencode struct.
 type B struct {
-	b *bstruct
+	pos int
+	b   *[]bstruct
 }
 
 type bstruct struct {
 	typ  byte
 	n    int64
 	str  string
-	list []pair
+	keys []string
+	list []int
 }
 
 type pair struct {
