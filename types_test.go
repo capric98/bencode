@@ -7,20 +7,7 @@ import (
 )
 
 func TestTypeSize(t *testing.T) {
-	fmt.Println(unsafe.Sizeof(B{}))       // 8
-	fmt.Println(unsafe.Sizeof(pair{}))    // 16
-	fmt.Println(unsafe.Sizeof(bstruct{})) // 64
+	fmt.Println(unsafe.Sizeof(B{}))  // 48
+	fmt.Println(unsafe.Sizeof(kv{})) // 16
 	t.Fail()
-}
-
-func TestOverflow(t *testing.T) {
-	defer func() {
-		if p := recover(); p != nil {
-			t.Fail()
-		}
-	}()
-	n := int64(1)
-	for i := 0; i < 100; i++ {
-		n = n * 2
-	}
 }

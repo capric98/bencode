@@ -1,7 +1,6 @@
 package bencode
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"testing"
@@ -55,28 +54,28 @@ import (
 // 	}
 // }
 
-func TestDecodeDict(t *testing.T) {
-	str := "d3:bar4:spam3:fooi42ee"
-	b, e := Decode([]byte(str))
-	if e != nil {
-		fmt.Println(e)
-		t.FailNow()
-	}
-	b.Print()
-	t.Fail()
-}
+// func TestDecodeDict(t *testing.T) {
+// 	str := "d3:bar4:spam3:fooi42ee"
+// 	b, e := Decode([]byte(str))
+// 	if e != nil {
+// 		fmt.Println(e)
+// 		t.FailNow()
+// 	}
+// 	b.Print()
+// 	t.Fail()
+// }
 
-func TestDecode(t *testing.T) {
-	tlmc, e := ioutil.ReadFile("test/tlmc.torrent")
-	if e != nil {
-		fmt.Println(e)
-		t.FailNow()
-	}
-	b, e := Decode(tlmc)
-	fmt.Println(len(*b.b))
-	//b.Print()
-	t.Fail()
-}
+// func TestDecode(t *testing.T) {
+// 	tlmc, e := ioutil.ReadFile("test/tlmc.torrent")
+// 	if e != nil {
+// 		fmt.Println(e)
+// 		t.FailNow()
+// 	}
+// 	b, e := Decode(tlmc)
+// 	fmt.Println(len(*b.b))
+// 	//b.Print()
+// 	t.Fail()
+// }
 
 func BenchmarkTLMCDecode(b *testing.B) {
 	tlmc, e := ioutil.ReadFile("test/TLMC.torrent")
@@ -95,17 +94,17 @@ func BenchmarkTLMCDecode(b *testing.B) {
 	}
 }
 
-func BenchmarkReader(b *testing.B) {
-	tlmc, e := ioutil.ReadFile("test/TLMC.torrent")
-	if e != nil {
-		fmt.Println(e)
-		b.FailNow()
-	}
-	b.ReportAllocs()
-	b.ResetTimer()
+// func BenchmarkReader(b *testing.B) {
+// 	tlmc, e := ioutil.ReadFile("test/TLMC.torrent")
+// 	if e != nil {
+// 		fmt.Println(e)
+// 		b.FailNow()
+// 	}
+// 	b.ReportAllocs()
+// 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		r := bytes.NewReader(tlmc)
-		_, _ = ioutil.ReadAll(r)
-	}
-}
+// 	for i := 0; i < b.N; i++ {
+// 		r := bytes.NewReader(tlmc)
+// 		_, _ = ioutil.ReadAll(r)
+// 	}
+// }
